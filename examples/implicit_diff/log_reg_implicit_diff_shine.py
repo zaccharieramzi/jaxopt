@@ -17,7 +17,6 @@ Implicit differentiation of logistic regression.
 =============================================
 """
 
-from typing import Any, Callable, NamedTuple
 from absl import app
 import jax
 import jax.numpy as jnp
@@ -25,7 +24,6 @@ from jaxopt import implicit_diff
 from jaxopt import OptaxSolver
 from jaxopt import LBFGS
 from jaxopt import loss
-from jaxopt._src.lbfgs import inv_hessian_product
 from jaxopt.objective import l2_multiclass_logreg_with_intercept
 import optax
 from sklearn import datasets
@@ -35,14 +33,8 @@ from sklearn import preprocessing
 _logloss_vmap = _logloss_vmap = jax.vmap(loss.multiclass_logistic_loss)
 
 
-class SHINESol(NamedTuple):
-  sol: Any
-  shine: Callable
-
-
 @implicit_diff.custom_root(
   jax.grad(l2_multiclass_logreg_with_intercept),
-  has_aux=True,
   use_shine=True
 )
 def log_reg_solver(init_params, l2reg, data):
@@ -53,18 +45,7 @@ def log_reg_solver(init_params, l2reg, data):
     history_size=30,
   )
 
-  params, state = solver.run(init_params=init_params, l2reg=l2reg, data=data)
-  def shine_matvec_fun(b):
-    return inv_hessian_product(
-      b,
-      s_history=state.s_history,
-      y_history=state.y_history,
-      rho_history=state.rho_history,
-      gamma=state.gamma,
-      start=0
-    )
-  return SHINESol(sol=params, shine=shine_matvec_fun), state
-
+  return solver.run(init_params=init_params, l2reg=l2reg, data=data)
 
 # Perhaps confusingly, theta is a parameter of the outer objective,
 # but l2reg = jnp.exp(theta) is an hyper-parameter of the inner objective.

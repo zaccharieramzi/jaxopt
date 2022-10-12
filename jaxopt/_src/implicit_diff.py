@@ -24,6 +24,7 @@ import jax
 
 from jaxopt._src import base
 from jaxopt._src import linear_solve
+from jaxopt._src.lbfgs import inv_hessian_product
 from jaxopt._src.tree_util import tree_add
 from jaxopt._src.tree_util import tree_mul
 from jaxopt._src.tree_util import tree_scalar_mul
@@ -215,19 +216,26 @@ def _custom_root(solver_fun, optimality_fun, solve, has_aux,
       args, kwargs = _extract_kwargs(kwarg_keys, flat_args)
 
       # solver_fun can return auxiliary data if has_aux = True.
-      if has_aux:
+      linear_solve = solve
+      if has_aux and not use_shine:
         cotangent = cotangent[0]
         sol = res[0]
+      elif use_shine:
+        cotangent = cotangent[0]
+        sol = res.params
+        qn_state = res.state
+        def linear_solve(matvec, b):
+          return inv_hessian_product(
+            b,
+            s_history=qn_state.s_history,
+            y_history=qn_state.y_history,
+            rho_history=qn_state.rho_history,
+            gamma=qn_state.gamma,
+            start=0
+          )
       else:
         sol = res
-      if use_shine:
-        sol = sol.sol
-        shine_matvec_fun = sol.shine
 
-        def linear_solve(matvec, b):
-          return shine_matvec_fun(b)
-      else:
-        linear_solve = solve
 
       ba_args, ba_kwargs, map_back = _signature_bind_and_match(
           reference_signature, *args, **kwargs)
