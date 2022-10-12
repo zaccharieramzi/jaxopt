@@ -75,7 +75,7 @@ def main(argv):
   data = model_selection.train_test_split(X, y, test_size=0.33, random_state=0)
 
   # Initialize solver.
-  solver = OptaxSolver(opt=optax.adam(1e-2), fun=outer_objective, has_aux=True)
+  solver = OptaxSolver(opt=optax.sgd(5e-1), fun=outer_objective, has_aux=True)
   theta = -3.0
   init_w = jnp.ones((X.shape[1], n_classes))
   init_b = jnp.zeros((n_classes,))
@@ -89,7 +89,7 @@ def main(argv):
     # The auxiliary data returned by the outer loss is stored in the state.
     init_inner = state.aux
     print(init_inner[1])
-    print(f"[Step {state.iter_num}] Validation loss: {state.value:.3f}, Reg param: {jnp.exp(theta):.3f}.")
+    print(f"[Step {state.iter_num}] Validation loss: {state.value:.3f}, Reg param: {jnp.exp(theta):.3e}.")
 
 if __name__ == "__main__":
   app.run(main)
