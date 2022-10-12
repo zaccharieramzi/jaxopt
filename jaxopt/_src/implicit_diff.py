@@ -169,7 +169,7 @@ def _signature_bind_and_match(signature, *args, **kwargs):
 
 
 def _custom_root(solver_fun, optimality_fun, solve, has_aux,
-                 reference_signature=None):
+                 reference_signature=None, use_shine=False):
   # When caling through `jax.custom_vjp`, jax attempts to resolve all
   # arguments passed by keyword to positions (this is in order to
   # match against a `nondiff_argnums` parameter that we do not use
@@ -220,6 +220,14 @@ def _custom_root(solver_fun, optimality_fun, solve, has_aux,
         sol = res[0]
       else:
         sol = res
+      if use_shine:
+        sol = sol.sol
+        shine_matvec_fun = sol.shine
+
+        def linear_solve(matvec, b):
+          return shine_matvec_fun(b)
+      else:
+        linear_solve = solve
 
       ba_args, ba_kwargs, map_back = _signature_bind_and_match(
           reference_signature, *args, **kwargs)
@@ -234,7 +242,7 @@ def _custom_root(solver_fun, optimality_fun, solve, has_aux,
 
       # Compute VJPs w.r.t. args.
       vjps = root_vjp(optimality_fun=optimality_fun, sol=sol,
-                      args=ba_args[1:], cotangent=cotangent, solve=solve)
+                      args=ba_args[1:], cotangent=cotangent, solve=linear_solve)
       # Prepend None as the vjp for init_params.
       vjps = (None,) + vjps
 
@@ -256,7 +264,8 @@ def _custom_root(solver_fun, optimality_fun, solve, has_aux,
 def custom_root(optimality_fun: Callable,
                 has_aux: bool = False,
                 solve: Callable = linear_solve.solve_normal_cg,
-                reference_signature: Optional[Callable] = None):
+                reference_signature: Optional[Callable] = None,
+                use_shine: bool = False) -> Callable:
   """Decorator for adding implicit differentiation to a root solver.
 
   Args:
@@ -274,6 +283,7 @@ def custom_root(optimality_fun: Callable,
       ambiguous (e.g. if both accept catch-all ``**kwargs``). To
       satisfy custom_root's requirement, any function with an
       unambiguous signature can be provided here.
+    use_shine: whether to use SHINE to compute the root.
 
   Returns:
     A solver function decorator, i.e.,
@@ -284,7 +294,7 @@ def custom_root(optimality_fun: Callable,
 
   def wrapper(solver_fun):
     return _custom_root(solver_fun, optimality_fun, solve, has_aux,
-                        reference_signature)
+                        reference_signature, use_shine)
 
   return wrapper
 
